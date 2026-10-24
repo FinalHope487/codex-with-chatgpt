@@ -296,6 +296,13 @@ describe("named hostname helpers", () => {
     expect(hostnameSlug("回声", "abcdef123456")).toBe("c2c-ws-abcdef12");
   });
 
+  it("gives each hub its own hostname so two hubs on one zone do not collide", () => {
+    expect(suggestedNamedHostname("example.com", "hub", "7a9e0c1b6bc8")).toBe("c2c-hub-7a9e0c.example.com");
+    expect(suggestedNamedHostname("example.com", "hub", "ffd10c1b6bc8")).not.toBe(
+      suggestedNamedHostname("example.com", "hub", "7a9e0c1b6bc8")
+    );
+  });
+
   it("parses a typed domain", () => {
     expect(parseZoneInput("https://Example.com/")).toBe("example.com");
     expect(parseZoneInput("not a domain")).toBeNull();

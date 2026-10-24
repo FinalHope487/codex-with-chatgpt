@@ -1,7 +1,13 @@
+import { HUB_KEYWORD } from "../hub/registry.js";
 import { normalizeNamedTunnelHostname } from "./cloudflared-named.js";
 
-/** DNS-safe label from a workspace name. Non-ASCII names fall back to the id. */
+/**
+ * DNS-safe label from a workspace name. Non-ASCII names fall back to the id.
+ * Every install's hub is named "hub", so it gets its id prefix too: two hubs on one
+ * zone (another state dir, or the Claude fork) must not both want `c2c-hub`.
+ */
 export function hostnameSlug(workspaceName: string, workspaceId: string): string {
+  if (workspaceName === HUB_KEYWORD) return `c2c-hub-${workspaceId.slice(0, 6)}`;
   const ascii = workspaceName
     .normalize("NFKD")
     .replace(/[^\x00-\x7F]/g, "")
