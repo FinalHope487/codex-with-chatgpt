@@ -1,7 +1,30 @@
 {
   "name": "codex-with-chatgpt",
   "version": "0.1.3",
-  "description": "ChatGPT thinks. Codex works. Use ChatGPT as the planning brain while keeping the Codex harness.",
+  "description": "Hub edition of Codex with ChatGPT: use ChatGPT Plus/Pro web as the planning and review brain for the Codex coding agent, one shared MCP connector for many local projects. No API key.",
+  "keywords": [
+    "codex",
+    "chatgpt",
+    "mcp",
+    "model-context-protocol",
+    "openai-codex",
+    "coding-agent",
+    "ai-coding",
+    "cloudflare-tunnel",
+    "oauth",
+    "read-only",
+    "hub",
+    "multi-project",
+    "code-review"
+  ],
+  "homepage": "https://github.com/FinalHope487/codex-with-chatgpt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FinalHope487/codex-with-chatgpt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/FinalHope487/codex-with-chatgpt/issues"
+  },
   "type": "module",
   "license": "MIT",
   "bin": {

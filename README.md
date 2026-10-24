@@ -1,5 +1,7 @@
 # Codex with ChatGPT — Hub edition
 
+> Use your ChatGPT Plus/Pro web subscription as the planning and code-review brain for the OpenAI Codex coding agent, with no API key. One shared MCP connector (Cloudflare Tunnel, OAuth, read-only) serves all your local projects.
+
 > [!IMPORTANT]
 > **This is a modified fork ("Hub edition") of [XiaoDuoYa/codex-with-chatgpt](https://github.com/XiaoDuoYa/codex-with-chatgpt), used under its MIT license.** It is not the original and is not endorsed by the original authors. The original copyright and license notice are kept in [LICENSE](LICENSE).
 >
@@ -10,9 +12,9 @@
 > | One ChatGPT connector, one tunnel, one hostname for every project, so no per-project setup or pairing | **Weaker isolation:** one pairing grants read access to *all* registered projects, not just one |
 > | **Log in once, not once per project.** In the original, every time you switch to a different project you must log in again by hand (create a new ChatGPT connector and pair it). Here one persisted login state is kept for the hub, so switching projects needs no login, which saves a lot of time. (Quick Tunnel restarts also change the URL and force a re-pair in either edition.) | |
 > | Add or remove a project with `c2c workspace add/remove`; the registry is re-read on every call, so no restart | **Single point of failure:** if the hub bridge or tunnel is down, every project is unreachable |
-> | Every read is bound to a workspace id, and the Skill's Workspace check compares ids, so a chat cannot silently read another project | Registration is local-only (CLI). ChatGPT cannot register a project, so each new project needs `c2c workspace add` first |
-> | Hub gets its own default hostname (`c2c-hub-<id>`), so two hubs on one domain do not collide | Diverges from upstream: more code to maintain and to merge with upstream changes, and less field-tested |
-> | Remembers a default fixed-domain zone for new setups | Tool calls carry a workspace argument, so a little more chatter than single-project mode |
+> | Every read is bound to a workspace id, and the Skill's Workspace check compares ids, so a chat cannot silently read another project  | |
+> | Hub gets its own default hostname (`c2c-hub-<id>`), so two hubs on one domain do not collide  | |
+> | Remembers a default fixed-domain zone for new setups  | |
 >
 > **Domain limits (read before choosing a connection mode):**
 > - The persistent, no-re-login setup needs a **fixed hostname**: a domain you own whose DNS is on Cloudflare (set it once with `c2c prefs set --default-zone <domain>`). Without one, only a Quick Tunnel is available; its URL is random and changes on every restart, so you must recreate the connector and pair again, as in the original.

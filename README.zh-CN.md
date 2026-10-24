@@ -2,6 +2,8 @@
 
 [English](README.md) | **简体中文**
 
+> 用你已付费的 ChatGPT Plus/Pro 网页版，为 OpenAI Codex 编码 Agent 做规划与代码审查，无需 API Key。一个共享的 MCP 连接器（Cloudflare 隧道、OAuth、只读）服务本机所有项目。
+
 > [!IMPORTANT]
 > **本仓库是 [XiaoDuoYa/codex-with-chatgpt](https://github.com/XiaoDuoYa/codex-with-chatgpt) 的修改分支（「Hub 版」），依 MIT 许可证使用。** 并非原版，也未获原作者背书。原版版权与许可声明保留在 [LICENSE](LICENSE)。
 >
@@ -12,9 +14,9 @@
 > | 所有项目共用一个连接器、一条隧道、一个域名，不必逐项目配置与配对 | **隔离较弱：** 一次配对即可读取*所有*已登记项目，而非单一项目 |
 > | **只登录一次，不是每个项目登录一次。** 原版每换一个项目就要手动登录一次（新建 ChatGPT 连接器并配对）。本版为 hub 维护一份持久化登录状态，换项目不必再登录，可省下大量时间。（Quick Tunnel 每次重启网址都会变，两个版本都得重新配对。） | |
 > | `c2c workspace add/remove` 增删项目，登记表每次调用都重新读取，无需重启 | **单点故障：** hub 桥接或隧道挂了，所有项目都读不到 |
-> | 每次读取都绑定 workspace id，Skill 的 Workspace 检查比对 id，聊天不会悄悄读到别的项目 | 登记只能在本机用命令行完成；ChatGPT 无法登记，新项目须先执行 `c2c workspace add` |
-> | hub 有独立默认域名（`c2c-hub-<id>`），同一域名下两个 hub 不会冲突 | 与上游分叉：维护与合并上游更新的成本更高，实际使用验证也较少 |
-> | 记住默认固定域名 zone，新建设置更省事 | 工具调用需带 workspace 参数，比单项目模式多一点往返 |
+> | 每次读取都绑定 workspace id，Skill 的 Workspace 检查比对 id，聊天不会悄悄读到别的项目  | |
+> | hub 有独立默认域名（`c2c-hub-<id>`），同一域名下两个 hub 不会冲突  | |
+> | 记住默认固定域名 zone，新建设置更省事  | |
 >
 > **域名限制（选择连接方式前请先看）：**
 > - 「持久、免重复登录」需要**固定域名**：你自己拥有、DNS 托管在 Cloudflare 的域名（用 `c2c prefs set --default-zone <域名>` 设置一次）。没有的话只能用 Quick Tunnel，网址随机且每次重启都会变，必须重新建连接器并配对，和原版一样。
