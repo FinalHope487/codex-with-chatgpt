@@ -70,9 +70,10 @@ whatever data it needs by itself.
      conversation opens a new chat from the Project collection page — never
      `goto` `https://chatgpt.com/` to create it, and never reuse another
      Codex conversation's chat URL just because `session.url` exists.
-   Each workspace also has exactly ONE ChatGPT connector. Do not create a
-   second connector for the same workspace. Other workspaces may have their
-   own connectors — never edit those.
+   All workspaces share ONE ChatGPT connector (the hub; see **Hub mode**). Do not
+   create a second connector for any workspace. Legacy per-workspace connectors
+   (`Codex with ChatGPT · <project>`) may still exist — never edit those unless
+   the user asks.
 7. After first-time setup, never ask the user to approve writing C2C's local
    settings directory. Run `c2c sandbox-allow --json` (idempotent). If it fails
    with EPERM / Operation not permitted, request elevated permissions and retry
@@ -354,12 +355,14 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
    in long-chat). Confirm Chat mode per **In-app browser** §7 (if it is Work,
    open a new Chat conversation instead). Send the boot prompt from
    `docs/protocol.md` §Boot Prompt, then (same chat) send:
-   `Use the "<connectorName>" connector: call list_workspaces, then call workspace_info with workspace="<WORKSPACE>" and read a top-level file. Reply with the workspace name.`
+   `Use the "<connectorName>" connector: call list_workspaces, then call workspace_info with workspace="<WORKSPACE>" and read a top-level file. Reply with the workspaceName and the workspaceId.`
    (`<WORKSPACE>` is the `workspace.name` from `c2c workspace add`; see **Hub mode**.)
-   Confirm the reply matches `<WORKSPACE>` (the project name; not the hub's `workspaceName`)
-   (wait per **In-app browser** §8).
+   Confirm the reply's `workspaceId` equals the `workspace.id` that `c2c workspace add`
+   returned (wait per **In-app browser** §8). Compare the id, not the name: the registry
+   name can differ from the folder name (`--name`, a collision suffix, `.c2c.json`), and the
+   hub's own `workspaceName` is the placeholder `hub`.
    Only then save the chat URL with `c2c session set` (see Conversation
-   management). If the name does not match, do not save. markDeliverable.
+   management). If the id does not match, do not save. markDeliverable.
 7. Report to the user exactly in this shape (no internals):
 
 ```
@@ -422,7 +425,9 @@ next action:
 `conversation.mode` is the only switch. Missing / legacy files with a chat URL
 and no Project stay **long-chat**. Do not ask those users to migrate. If they
 later say they want a Project, run **Bind Project**. A brand-new workspace
-(no session file) is **project**.
+(no session file) is **project**, unless the user saved
+`c2c prefs set --default-conversation long-chat`: then it starts as **long-chat**
+(`conversation.reason` is `default-long-chat`) and nothing is asked.
 
 Never match a Project or a chat by display name. Never upload the repo to
 Project sources. Never click 分享 / Share. Do not rename ChatGPT chats.
@@ -463,7 +468,7 @@ One ChatGPT Project per workspace. Mapping:
 2. Same workspace, a **new** Codex conversation → new ChatGPT chat from the
    collection page (`conversation.projectUrl`). Ignore `session.url` unless
    you already saved it earlier in THIS Codex thread.
-3. Different workspace → different Project and different connector.
+3. Different workspace → different Project (the connector is the same shared hub connector).
 
 **Open a chat in this Codex thread**
 
@@ -530,12 +535,14 @@ You are the planning and review layer for one local workspace. Codex executes.
 
 This Project is bound only to:
 - Workspace name: {{workspace_name}}
+- Workspace id: {{workspace_id}}
+- Hub connector only (it has list_workspaces): pass workspace="{{workspace_name}}" on every tool call
 - Kind: {{project_type}} ({{languages}} / {{frameworks}})
 - Connector (use this one only): {{connector_name}}
 
 When you call tools, use ONLY that connector. Do not use any other
-Codex with ChatGPT connector. If workspace_info names a different
-workspace, stop. Do not plan. Do not use this Project's memory.
+Codex with ChatGPT connector. If workspace_info returns a workspaceId
+other than {{workspace_id}}, stop. Do not plan. Do not use this Project's memory.
 
 Read code, git, diffs, and any released command output through that
 connector. Never ask anyone to paste file bodies, diffs, or logs. After

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ensureDir, getStateDir, writeSecureJson } from "../config/paths.js";
-import { Workspace, WorkspaceError } from "../workspace/manager.js";
+import { Workspace } from "../workspace/manager.js";
 
 /**
  * Hub mode: ONE bridge / ONE ChatGPT connector serving many projects.
@@ -286,7 +286,7 @@ export function removeWorkspace(nameOrId: string): RegisteredWorkspace | null {
 // ---------------------------------------------------------------- resolution for MCP calls
 
 export interface HubContext {
-  /** Resolve the workspace a tool call targets. Throws HubError / WorkspaceError. */
+  /** Resolve the workspace a tool call targets. Throws HubError (never a raw error: its message would carry a local path). */
   resolve(nameOrId?: string): Workspace;
   list(): { name: string; id: string }[];
 }
@@ -330,15 +330,19 @@ export function createHubContext(): HubContext {
         }
         return workspace;
       } catch (error) {
-        // only a vanished folder is "missing"; keep other causes (e.g. it became a file) as they are
-        if (error instanceof WorkspaceError && error.code === "FILE_NOT_FOUND") {
+        if (error instanceof HubError) throw error;
+        // Raw errors (WorkspaceError, EACCES, ...) embed absolute paths and reach ChatGPT verbatim.
+        const code = (error as { code?: string }).code;
+        if (code === "FILE_NOT_FOUND") {
           throw new HubError("WORKSPACE_ROOT_MISSING", `Workspace "${entry.name}" is registered but its folder is gone.`);
         }
-        if (error instanceof WorkspaceError && error.code === "NOT_A_DIRECTORY") {
-          // WorkspaceError's own message embeds the absolute path, which would reach ChatGPT
+        if (code === "NOT_A_DIRECTORY") {
           throw new HubError("WORKSPACE_ROOT_INVALID", `Workspace "${entry.name}" is registered but its path is no longer a folder.`);
         }
-        throw error;
+        throw new HubError(
+          "WORKSPACE_ROOT_INVALID",
+          `Workspace "${entry.name}" is registered but cannot be opened (${code ?? "unknown error"}).`
+        );
       }
     },
   };

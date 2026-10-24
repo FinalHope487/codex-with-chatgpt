@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { startBridge, type Bridge } from "../src/bridge/server.js";
@@ -170,6 +170,30 @@ describe("hub registry", () => {
     }
     expect((caught as { code?: string } | undefined)?.code).toBe("WORKSPACE_ROOT_INVALID");
     expect((caught as Error).message).not.toContain(parent); // reaches ChatGPT: no local paths
+  });
+
+  it("reports any other failure to open a registered folder without leaking its path", () => {
+    dirs.push(isolateStateDir());
+    const dir = project("locked");
+    const registered = addWorkspace(dir, { name: "locked" }).workspace;
+    const realStat = fs.statSync;
+    const spy = vi.spyOn(fs, "statSync").mockImplementation(((p: fs.PathLike, ...rest: unknown[]) => {
+      if (String(p) === registered.root) {
+        throw Object.assign(new Error(`EACCES: permission denied, stat '${registered.root}'`), { code: "EACCES" });
+      }
+      return (realStat as (...a: unknown[]) => unknown)(p, ...rest);
+    }) as typeof fs.statSync);
+    let caught: unknown;
+    try {
+      createHubContext().resolve("locked");
+    } catch (error) {
+      caught = error;
+    } finally {
+      spy.mockRestore();
+    }
+    expect((caught as { code?: string } | undefined)?.code).toBe("WORKSPACE_ROOT_INVALID");
+    expect((caught as Error).message).toContain("EACCES");
+    expect((caught as Error).message).not.toContain(registered.root);
   });
 
   it("distinguishes a registry that cannot be read from one that is corrupt, without leaking its path", () => {
