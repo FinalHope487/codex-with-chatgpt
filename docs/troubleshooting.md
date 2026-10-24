@@ -66,10 +66,10 @@ Project (or switch long-chat) and continue there.
 
 Fixed ChatGPT pages for first-time setup and later repair (do not hunt the UI):
 
-- Developer mode: https://chatgpt.com/#settings/Security
+- Developer mode (only if creating the connector says it is required; the current UI has no up-front toggle): https://chatgpt.com/#settings/Security
 - Plugins hub (manage existing connectors): https://chatgpt.com/plugins
 - Add a connector:
-  https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins
+  https://chatgpt.com/plugins (then 新增 → 新增自訂 MCP 伺服器)
 
 ### Tunnel URL unreachable / ChatGPT says the connector is broken
 Same as above: `c2c doctor`, then Delete + recreate THIS workspace's

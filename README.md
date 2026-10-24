@@ -138,6 +138,28 @@ then saves that collection link and starts chats from that page. Existing
 workspaces that already have a C2C chat stay on the old one-conversation
 style until you ask to switch.
 
+### Hub mode: one connector for every project
+
+```bash
+c2c workspace add -w <project>   # register (idempotent; live, no restart)
+c2c workspace list               # what ChatGPT can see
+c2c workspace remove <name>      # revoke one project immediately
+c2c doctor -w hub                # start/repair the shared bridge + tunnel
+c2c setup / pair / status ... -w hub   # server-side commands use the word "hub"
+```
+
+ChatGPT calls `list_workspaces`, then passes `workspace="<name>"` on every tool.
+Only registered projects are reachable, and **any chat that can use the connector
+can read any registered project** — see [security](docs/security.md). Registration
+refuses your home directory, drive roots and C2C's own state directory. The
+single-project mode still works if you run `c2c setup -w <project>` yourself. `-w hub` always means the hub; for a project folder literally named `hub`, pass `-w ./hub`.
+
+Machine-wide defaults so a new project asks nothing: `c2c prefs set --default-zone <domain>`
+(fixed hostname) and `c2c prefs set --default-conversation long-chat|project`.
+
+> The ChatGPT custom-connector form is now at `chatgpt.com/plugins` → `新增` →
+> `新增自訂 MCP 伺服器`; the old create-connector deep link no longer opens it.
+
 ### Optional stable hostname
 
 The default public address is a temporary Cloudflare URL. It changes when the

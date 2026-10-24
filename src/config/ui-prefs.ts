@@ -5,6 +5,10 @@ export type SetupMode = "auto" | "manual";
 
 export const SETUP_MODES: readonly SetupMode[] = ["auto", "manual"];
 
+export type DefaultConversationMode = "long-chat" | "project";
+
+export const DEFAULT_CONVERSATION_MODES: readonly DefaultConversationMode[] = ["long-chat", "project"];
+
 /** Shown once, before the first ChatGPT connection on this machine. */
 export const SETUP_CHOICE_PROMPT = [
   "首次连接 ChatGPT 前，请选择一种配置方式（选一次即可，之后默认沿用）：",
@@ -25,12 +29,18 @@ export const SETUP_CHOICE_PROMPT = [
 interface StoredUiPrefs {
   developerModeEnabled?: boolean;
   setupMode?: SetupMode;
+  /** Machine-wide: Cloudflare zone used for every new workspace's named hostname. */
+  defaultNamedZone?: string;
+  /** Machine-wide: conversation mode a brand-new workspace starts in. */
+  defaultConversationMode?: DefaultConversationMode;
   updatedAt: string;
 }
 
 export interface UiPrefsView {
   developerModeEnabled: boolean;
   setupMode: SetupMode | null;
+  defaultNamedZone: string | null;
+  defaultConversationMode: DefaultConversationMode | null;
   setupChoicePrompt: string;
   remembered: {
     developerMode: boolean;
@@ -49,6 +59,11 @@ function readStored(): StoredUiPrefs | null {
   return {
     developerModeEnabled: raw.developerModeEnabled === true,
     setupMode,
+    defaultNamedZone:
+      typeof raw.defaultNamedZone === "string" && raw.defaultNamedZone.trim() ? raw.defaultNamedZone.trim() : undefined,
+    defaultConversationMode: DEFAULT_CONVERSATION_MODES.includes(raw.defaultConversationMode as DefaultConversationMode)
+      ? raw.defaultConversationMode
+      : undefined,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
   };
 }
@@ -60,6 +75,8 @@ export function readUiPrefs(): UiPrefsView {
   return {
     developerModeEnabled,
     setupMode,
+    defaultNamedZone: stored?.defaultNamedZone ?? null,
+    defaultConversationMode: stored?.defaultConversationMode ?? null,
     setupChoicePrompt: SETUP_CHOICE_PROMPT,
     remembered: {
       developerMode: developerModeEnabled,
@@ -71,14 +88,24 @@ export function readUiPrefs(): UiPrefsView {
 export interface UiPrefsPatch {
   developerModeEnabled?: true;
   setupMode?: SetupMode;
+  defaultNamedZone?: string;
+  defaultConversationMode?: DefaultConversationMode;
 }
 
 export function mergeUiPrefs(patch: UiPrefsPatch): UiPrefsView {
   if (patch.setupMode !== undefined && !SETUP_MODES.includes(patch.setupMode)) {
     throw new Error(`setup-mode must be one of ${SETUP_MODES.join(", ")}`);
   }
+  if (
+    patch.defaultConversationMode !== undefined &&
+    !DEFAULT_CONVERSATION_MODES.includes(patch.defaultConversationMode)
+  ) {
+    throw new Error(`default-conversation must be one of ${DEFAULT_CONVERSATION_MODES.join(", ")}`);
+  }
   const previous = readStored();
   const setupMode = patch.setupMode ?? previous?.setupMode;
+  const defaultNamedZone = patch.defaultNamedZone ?? previous?.defaultNamedZone;
+  const defaultConversationMode = patch.defaultConversationMode ?? previous?.defaultConversationMode;
   const stored: StoredUiPrefs = {
     updatedAt: new Date().toISOString(),
   };
@@ -88,6 +115,8 @@ export function mergeUiPrefs(patch: UiPrefsPatch): UiPrefsView {
     stored.developerModeEnabled = true;
   }
   if (setupMode) stored.setupMode = setupMode;
+  if (defaultNamedZone) stored.defaultNamedZone = defaultNamedZone;
+  if (defaultConversationMode) stored.defaultConversationMode = defaultConversationMode;
   writeSecureJson(prefsFile(), stored);
   return readUiPrefs();
 }

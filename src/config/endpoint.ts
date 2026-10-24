@@ -3,8 +3,8 @@ import { getStateDir, readJsonIfExists, writeSecureJson } from "./paths.js";
 
 export const CHATGPT_DEVELOPER_MODE_URL = "https://chatgpt.com/#settings/Security";
 export const CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins";
-export const CHATGPT_CREATE_CONNECTOR_URL =
-  "https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins";
+/** The create form has no deep link any more: open the hub, then 新增 → 新增自訂 MCP 伺服器. */
+export const CHATGPT_CREATE_CONNECTOR_URL = "https://chatgpt.com/plugins";
 
 export const DEFAULT_CONNECTOR_NAME = "Codex with ChatGPT";
 

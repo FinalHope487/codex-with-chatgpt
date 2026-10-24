@@ -16,6 +16,7 @@ import { Logger, nullLogger } from "../logger/index.js";
 import { DEFAULT_HOST, DEFAULT_PORT } from "../config/paths.js";
 import { SERVICE_NAME, VERSION } from "../version.js";
 import { writeRuntimeState, clearRuntimeState, type RuntimeState } from "./runtime.js";
+import { createHubContext, isHubRoot } from "../hub/registry.js";
 
 function tunnelForWorkspace(workspaceId: string, logger: Logger): TunnelProvider {
   const binding = namedTunnelBinding(readTunnelState(workspaceId));
@@ -82,6 +83,8 @@ function listen(app: express.Express, host: string, preferredPort: number): Prom
 export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   const logger = opts.logger ?? nullLogger;
   const workspace = new Workspace(opts.workspaceRoot);
+  // Hub mode: this bridge serves every registered workspace instead of one folder.
+  const hubMode = isHubRoot(workspace.root);
   const host = opts.host ?? DEFAULT_HOST;
   if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost") {
     throw new Error("The bridge only binds to loopback addresses. Public exposure goes through the tunnel.");
@@ -117,7 +120,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     createOAuthRouter({
       store: authStore,
       pairing,
-      workspaceName: workspace.name,
+      workspaceName: hubMode ? "all registered projects" : workspace.name,
       getBaseUrl,
       logger,
     })
@@ -125,7 +128,10 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
 
   // ---- MCP endpoint (bearer-protected) --------------------------------------
 
-  const mcpHandler = createMcpHttpHandler(() => createMcpServer({ workspace, logger }), logger);
+  const mcpHandler = createMcpHttpHandler(
+    () => createMcpServer({ workspace, logger, hub: hubMode ? createHubContext() : undefined }),
+    logger
+  );
   app.all(
     "/mcp",
     express.json({ limit: "8mb" }),
@@ -212,7 +218,9 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
 
   const { server, port } = await listen(app, host, opts.port ?? DEFAULT_PORT);
   const startedAt = new Date().toISOString();
-  logger.info(`Bridge listening on ${host}:${port} for workspace ${workspace.name} (${workspace.id})`);
+  logger.info(
+    `Bridge listening on ${host}:${port} for ${hubMode ? "the hub (all registered workspaces)" : `workspace ${workspace.name}`} (${workspace.id})`
+  );
 
   const persistRuntime = (): void => {
     if (opts.persistRuntime === false) return;

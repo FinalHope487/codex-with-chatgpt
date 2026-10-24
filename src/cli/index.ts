@@ -29,7 +29,25 @@ import {
 import { Logger } from "../logger/index.js";
 import { getStateDir } from "../config/paths.js";
 import { ensureSandboxAllowlist, getCodexConfigPath, isStateDirAllowlisted } from "../config/sandbox-allow.js";
-import { mergeUiPrefs, readUiPrefs, SETUP_MODES, type SetupMode } from "../config/ui-prefs.js";
+import {
+  addWorkspace,
+  HUB_KEYWORD,
+  hubRoot,
+  HubError,
+  isHubRoot,
+  listRegistered,
+  registryFile,
+  registryHealth,
+  removeWorkspace,
+} from "../hub/registry.js";
+import {
+  DEFAULT_CONVERSATION_MODES,
+  mergeUiPrefs,
+  readUiPrefs,
+  SETUP_MODES,
+  type DefaultConversationMode,
+  type SetupMode,
+} from "../config/ui-prefs.js";
 import {
   CHATGPT_CREATE_CONNECTOR_URL,
   CHATGPT_DEVELOPER_MODE_URL,
@@ -68,7 +86,9 @@ const say = (msg: string): void => {
 const check = (msg: string): void => say(`✓ ${msg}`);
 const cross = (msg: string): void => say(`✗ ${msg}`);
 
+/** `-w hub` is the shared connector's placeholder workspace; use `./hub` for a folder named hub. */
 function resolveWorkspace(option?: string): string {
+  if (option === HUB_KEYWORD) return hubRoot();
   return path.resolve(option ?? process.cwd());
 }
 
@@ -142,16 +162,20 @@ function persistWorkspaceEndpoint(opts: {
 function tunnelChoicePayload(workspace: Workspace, zoneHint?: string): Record<string, unknown> {
   const state = readTunnelState(workspace.id);
   const zone = parseZoneInput(zoneHint ?? "") ?? state.zone ?? null;
+  const defaultZone = parseZoneInput(readUiPrefs().defaultNamedZone ?? "");
+  // A remembered machine-wide zone answers the question for a new workspace.
+  const defaultChoice = needsTunnelChoice(state) && defaultZone ? { mode: "named", zone: defaultZone } : null;
   return {
     ok: true,
     needsChoice: needsTunnelChoice(state),
+    defaultChoice,
     preference: state.preference,
     loggedIn: hasCloudflaredCert(),
     namedReady: isNamedTunnelReady(state),
     zone,
     hostname: state.hostname ?? null,
     suggestedHostname: zone ? suggestedNamedHostname(zone, workspace.name, workspace.id) : null,
-    userPrompt: needsTunnelChoice(state) ? TUNNEL_CHOICE_PROMPT : undefined,
+    userPrompt: needsTunnelChoice(state) && !defaultChoice ? TUNNEL_CHOICE_PROMPT : undefined,
     loginPrompt: NAMED_LOGIN_PROMPT,
     fallbackReason: state.fallbackReason,
   };
@@ -461,6 +485,7 @@ program
     try {
       workspace = new Workspace(root);
       report.workspace = { ok: true, detail: workspace.name };
+      if (isHubRoot(workspace.root)) report.registered = registryHealth();
     } catch (error) {
       report.workspace = { ok: false, detail: (error as Error).message };
     }
@@ -688,6 +713,7 @@ program
       node: "Node.js",
       sandbox: "Sandbox",
       workspace: "Workspace",
+      registered: "Registered projects",
       bridge: "Bridge",
       mcp: "MCP",
       oauth: "OAuth",
@@ -789,8 +815,12 @@ program
     if (!shown) say("暂无日志。");
   });
 
-program
+const workspaceCmd = program
   .command("workspace")
+  .description("Show workspace info, or manage the projects the shared connector (hub) may read");
+
+workspaceCmd
+  .command("info", { isDefault: true })
   .description("Show workspace identity and project info")
   .option("-w, --workspace <path>")
   .option("--json", "machine-readable output", false)
@@ -803,6 +833,82 @@ program
       say(`Workspace：${data.name}（${data.workspaceId}）`);
       say(`类型：${data.projectType}  语言：${data.languages.join(", ") || "-"}`);
       say(`路径：${data.root}`);
+    }
+  });
+
+/** Same shape as handleCliError (`error` is the message), plus the machine-readable `code`. */
+function handleHubError(error: unknown, json: boolean): void {
+  if (error instanceof HubError) {
+    // the message goes to ChatGPT too, so it has no paths; the local user gets the registry path here
+    const registry = error.code.startsWith("REGISTRY_") ? registryFile() : undefined;
+    if (json) say(JSON.stringify({ ok: false, error: error.message, code: error.code, ...(registry ? { registry } : {}) }));
+    else {
+      cross(error.message);
+      if (registry) say(`  ${registry}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  handleCliError(error, json);
+}
+
+workspaceCmd
+  .command("add [path]")
+  .description("Register a project with the shared connector (idempotent; takes effect immediately)")
+  .option("-w, --workspace <path>", "project folder (default: current directory)")
+  .option("--name <name>", "name ChatGPT uses for this project (default: folder name)")
+  .option("--json", "machine-readable output", false)
+  .action((pathArg: string | undefined, opts: { workspace?: string; name?: string; json: boolean }) => {
+    try {
+      const root = pathArg ? path.resolve(pathArg) : resolveWorkspace(opts.workspace);
+      if (isHubRoot(root)) throw new HubError("UNSAFE_ROOT", "The hub placeholder cannot be registered.");
+      const { workspace, created } = addWorkspace(root, { name: opts.name });
+      if (opts.json) say(JSON.stringify({ ok: true, created, workspace }));
+      else check(`${created ? "已注册" : "已在白名单"}：${workspace.name}（${workspace.id}）`);
+    } catch (error) {
+      handleHubError(error, opts.json);
+    }
+  });
+
+workspaceCmd
+  .command("remove <nameOrId>")
+  .description("Unregister a project; ChatGPT loses access immediately")
+  .option("-w, --workspace <path>")
+  .option("--json", "machine-readable output", false)
+  .action((nameOrId: string, opts: { json: boolean }) => {
+    try {
+      const removed = removeWorkspace(nameOrId);
+      if (opts.json) {
+        say(JSON.stringify({ ok: removed !== null, removed }));
+        if (!removed) process.exitCode = 1;
+        return;
+      }
+      if (removed) check(`已移除：${removed.name}`);
+      else {
+        cross(`没有这个已注册的项目：${nameOrId}`);
+        process.exitCode = 1;
+      }
+    } catch (error) {
+      handleHubError(error, opts.json);
+    }
+  });
+
+workspaceCmd
+  .command("list")
+  .description("List the projects registered with the shared connector")
+  .option("-w, --workspace <path>")
+  .option("--json", "machine-readable output", false)
+  .action((opts: { json: boolean }) => {
+    try {
+      const all = listRegistered();
+      if (opts.json) {
+        say(JSON.stringify({ ok: true, workspaces: all }));
+        return;
+      }
+      if (all.length === 0) say("还没有注册任何项目。用 c2c workspace add 注册当前项目。");
+      for (const w of all) say(`${w.name}  ${w.id}  ${w.root}`);
+    } catch (error) {
+      handleHubError(error, opts.json);
     }
   });
 
@@ -1080,20 +1186,34 @@ acceptUnusedWorkspaceOption(
     .description("Save a ChatGPT setup choice for this machine")
     .option("--developer-mode", "remember that ChatGPT developer mode is on", false)
     .option("--setup-mode <mode>", "auto (preview) or manual")
+    .option("--default-zone <domain>", "Cloudflare domain reused for every new workspace's fixed hostname")
+    .option("--default-conversation <mode>", "long-chat or project: how a brand-new workspace starts")
     .option("--json", "machine-readable output", false)
 )
-  .action((opts: { developerMode: boolean; setupMode?: string; json: boolean }) => {
+  .action((opts: { developerMode: boolean; setupMode?: string; defaultZone?: string; defaultConversation?: string; json: boolean }) => {
     try {
       const modeRaw = opts.setupMode?.trim().toLowerCase();
       if (modeRaw && !SETUP_MODES.includes(modeRaw as SetupMode)) {
         throw new Error(`setup-mode must be one of ${SETUP_MODES.join(", ")}`);
       }
-      if (!opts.developerMode && !modeRaw) {
-        throw new Error("nothing to save: pass --developer-mode and/or --setup-mode");
+      const convRaw = opts.defaultConversation?.trim().toLowerCase();
+      if (convRaw && !DEFAULT_CONVERSATION_MODES.includes(convRaw as DefaultConversationMode)) {
+        throw new Error(`default-conversation must be one of ${DEFAULT_CONVERSATION_MODES.join(", ")}`);
+      }
+      const defaultZone = opts.defaultZone === undefined ? undefined : parseZoneInput(opts.defaultZone);
+      if (opts.defaultZone !== undefined && !defaultZone) {
+        throw new Error("default-zone must be a domain such as example.com");
+      }
+      if (!opts.developerMode && !modeRaw && !convRaw && !defaultZone) {
+        throw new Error(
+          "nothing to save: pass --developer-mode, --setup-mode, --default-zone and/or --default-conversation"
+        );
       }
       const prefs = mergeUiPrefs({
         developerModeEnabled: opts.developerMode ? true : undefined,
         setupMode: modeRaw as SetupMode | undefined,
+        defaultNamedZone: defaultZone ?? undefined,
+        defaultConversationMode: convRaw as DefaultConversationMode | undefined,
       });
       if (opts.json) {
         say(JSON.stringify({ ok: true, ...prefs }));
@@ -1102,6 +1222,8 @@ acceptUnusedWorkspaceOption(
       if (opts.developerMode) check("已记住开发人员模式已开启");
       if (modeRaw === "auto") check("已记住配置方式：AI 自动化配置（预览版）");
       if (modeRaw === "manual") check("已记住配置方式：手动教学配置");
+      if (defaultZone) check(`已记住默认固定域名：${defaultZone}`);
+      if (convRaw) check(`已记住新项目默认对话方式：${convRaw}`);
     } catch (error) {
       handleCliError(error, opts.json);
     }
@@ -1190,7 +1312,9 @@ tunnelCmd
         say(JSON.stringify(payload));
         return;
       }
-      if (payload.needsChoice) say(TUNNEL_CHOICE_PROMPT);
+      if (payload.needsChoice && payload.defaultChoice) {
+        say(`将使用已记住的固定域名：${(payload.defaultChoice as { zone: string }).zone}（无需询问）`);
+      } else if (payload.needsChoice) say(TUNNEL_CHOICE_PROMPT);
       else if (payload.namedReady) check(`固定域名：${payload.hostname}`);
       else say("当前使用临时地址。");
     } catch (error) {
@@ -1225,7 +1349,7 @@ tunnelCmd
       if (mode !== "named") {
         throw new Error("mode must be quick or named");
       }
-      const zone = parseZoneInput(opts.zone ?? "");
+      const zone = parseZoneInput(opts.zone ?? readUiPrefs().defaultNamedZone ?? "");
       if (!zone) {
         const payload = {
           ok: false,

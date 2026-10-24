@@ -27,7 +27,7 @@ whatever data it needs by itself.
    field labels/values the user must enter, without explaining internals.
 3. The pairing code is the ONLY credential you may ever type into a browser.
    Never touch OAuth tokens, cookies, or session storage.
-4. If something fails, run `c2c doctor` and repair silently. Only involve the user
+4. If something fails, run `c2c doctor -w hub` and repair silently. Only involve the user
    for logins, CAPTCHA, 2FA, explicit consent screens, or **guided manual
    ChatGPT setup** below — and then give them ONE action.
    Before the first ChatGPT connection on this machine, `c2c prefs --json`:
@@ -41,9 +41,10 @@ whatever data it needs by itself.
      A browser/js timeout, a page still loading/generating, or waiting for
      user login/2FA does NOT count as a failure. Do not change the saved
      `setupMode` when falling back.
-   `developerModeEnabled: true` means skip `#settings/Security` until a
-   connector create fails because developer mode is required. Then open
-   that page, enable it, and `c2c prefs set --developer-mode --json`.
+   Developer mode is normally not needed (the custom-MCP form opens without it, see
+   **URLs only**). Only if creating a connector fails because it is required, open
+   `#settings/Security`, enable it if the setting exists, and
+   `c2c prefs set --developer-mode --json`. `developerModeEnabled: true` means skip it.
    These prefs are for this machine, not per workspace. Do not ask again
    on reconnect or a second repo. A new computer (empty prefs) asks/checks
    once.
@@ -78,7 +79,7 @@ whatever data it needs by itself.
    ONCE. After `{ "alreadyAllowed": true }` or `{ "added": true }`, stay silent.
 8. ChatGPT pages: only the URLs in **In-app browser (ChatGPT)**. Never start
    from chatgpt.com and click through menus.
-9. **Doctor gate.** After `c2c doctor --json`, do not `goto` ChatGPT and do not
+9. **Doctor gate.** After `c2c doctor -w hub --json`, do not `goto` ChatGPT and do not
    send `[C2C]` until local is green — except the reconnect settings pages when
    `chatgptRepair.needed` is true. Not green:
    - `report.bridge.ok` is not true
@@ -89,10 +90,10 @@ whatever data it needs by itself.
    - `namedRepair.needed` is true (user must log in to Cloudflare, then doctor again.
      Do not Delete the ChatGPT connector — the address did not change)
    - `report.bridge` says 状态无法确认: the local bridge may still be running.
-     Do not `c2c start`, do not Delete the connector, do not treat it as
+     Do not `c2c start -w hub`, do not Delete the connector, do not treat it as
      `chatgptRepair`. Wait and run doctor again.
    If doctor is already green and `chatgptRepair.needed` is false, do not
-   `c2c restart`, do not start a second tunnel, and do not Delete the
+   `c2c restart -w hub`, do not start a second tunnel, and do not Delete the
    connector. ChatGPT/IAB-only errors are not permission to churn the
    public address.
    A ChatGPT-side 401 after a sent message is different: repair then, do not
@@ -122,10 +123,17 @@ that close the tab, hide the window, or stall on the settings page.
    marked (standby). Do not let default turn cleanup close it.
 
 4. **URLs only** (same tab, `goto` — never hunt menus):
-   - 开发人员模式: `https://chatgpt.com/#settings/Security`
-     (skip when `c2c prefs --json` has `developerModeEnabled: true`)
+   - 开发人员模式: the current UI has no such toggle at `#settings/Security` and the custom-MCP form
+     opened without it (2026-10-24). Visit only if creating the connector fails saying developer
+     mode is required. (skip when `c2c prefs --json` has `developerModeEnabled: true`)
    - 插件总管: `https://chatgpt.com/plugins`
-   - 加插件: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - 加插件: `https://chatgpt.com/plugins`, then top-right **新增 → 新增自訂 MCP 伺服器**.
+     The old `…#settings/Connectors?create-connector=true` URL now redirects to
+     `/settings/plugins-settings` and does NOT open the form (verified 2026-10-24).
+     Form: 名稱 = `connectorName`, 说明, 伺服器 URL = `mcpUrl`, 身分驗證 = OAuth, tick
+     「我已瞭解並希望繼續」 (re-check it is ticked before submitting), then 「建立為外掛程式」.
+     A dialog 「與 … 連接」 follows: its 「連接 …」 button navigates the same tab to the bridge authorize
+     page — only then run `c2c pair -w hub --json` and fill the code.
    - 新对话 (long-chat only, and only if no saved chat): `https://chatgpt.com/`
    - Saved C2C chat: `conversation.chatUrl` / `session.url` (long-chat, or
      the chat already bound in THIS Codex conversation)
@@ -188,13 +196,48 @@ that close the tab, hide the window, or stall on the settings page.
   All commands support `--json` for parsing.
 - If the checkout has no `node_modules` or no `dist/`, first run
   `corepack pnpm install && corepack pnpm build` inside it.
-- For commands that act on the user's project (`setup`, `doctor`, `session`,
-  `restart`, `start`, `stop`, `status`, `pair`, `unpair`, `logs`, `workspace`,
-  `record`, `tunnel status`, `tunnel choose`), pass `-w <workspace root>`
-  (the project the user is working on, NOT the c2c repo).
 - Do not add `-w` to machine-wide commands: `update-check`, `sandbox-allow`,
   `prefs`, `tunnel login`. They still accept and ignore `-w`, so a leftover
   flag must not fail the command.
+
+## Hub mode (one connector for every project and session)
+
+There is ONE bridge, ONE tunnel hostname and ONE ChatGPT connector
+(`Codex with ChatGPT · hub`) for the whole machine. Projects are made visible to it
+with a registry (allowlist). Nothing about a project is set up in ChatGPT.
+
+**Which `-w` to pass**
+
+| Kind | Commands | `-w` |
+| --- | --- | --- |
+| Server side (bridge, tunnel, connector) | `setup`, `doctor`, `start`, `stop`, `restart`, `status`, `pair`, `unpair`, `logs`, `tunnel status`, `tunnel choose` | `-w hub` (the literal word) |
+| The project you are working on | `workspace add/remove/list`, `session`, `record`, `asset import` | `-w <project root>` (NOT the c2c repo) |
+
+Every workflow below that says `-w <workspace>` or `-w <ws>` for a server-side command
+means `-w hub`; per-project commands keep the project root. `-w hub` is always the hub:
+for a project folder literally named `hub`, pass `-w ./hub`.
+
+**Every task, right after the daily update check (cheap, idempotent)**
+
+1. `c2c workspace add -w <project> --json` — registers the project. Use the returned
+   `workspace.name` as WORKSPACE below. Takes effect immediately; no restart.
+2. `c2c doctor -w hub --json` — starts the bridge and tunnel if they are down. It fails
+   (`registered`) while no project is registered or the registry file is unreadable.
+
+**WORKSPACE.** Every control message (INIT, EXECUTED, HANDOFF) carries a
+`WORKSPACE: <name>` line, and the boot prompt tells ChatGPT to pass
+`workspace="<name>"` on every tool call. ChatGPT chats are still one per project
+(`c2c session -w <project>`), so a new Codex session, a new project or a new ChatGPT
+chat never needs a new connector, a new pairing code or a login.
+
+**One-time per machine** is only: **Connection choice** → `c2c setup -w hub` →
+create the connector → pair. After that, new projects and new sessions skip all of it.
+Revoking one project: `c2c workspace remove <name>`. Revoking everything:
+`c2c unpair -w hub`. For normal work do not create a per-project connector or run
+`c2c setup -w <project>`: the hub replaces them. Single-project mode still exists for
+a user who runs it on purpose; never start or stop such a bridge yourself.
+The old per-project connectors (`Codex with ChatGPT · <project>`) are legacy;
+leave them alone unless the user asks to delete them.
 
 ## Daily update check
 
@@ -223,24 +266,30 @@ Inside the checkout directory (see Locations):
    `<codex-home>/skills/codex-with-chatgpt/SKILL.md`, then fix the "checkout lives at:"
    line in the copy to the actual checkout path.
 4. `c2c sandbox-allow --json` (so existing installs pick up the sandbox allowlist),
-   then `c2c restart -w <workspace>` so the bridge runs the new code, then
+   then `c2c restart -w hub` so the bridge runs the new code, then
    `c2c update-check --force --json` to refresh the cache (should now report up to date).
 5. Tell the user "✓ 已更新到最新版本" — then resume whatever task triggered this.
    (The updated SKILL.md takes effect from the next Codex session; that's expected.)
 
-## Connection choice (once per workspace)
+## Connection choice (once per machine)
 
-Ask this **before** the public address exists (`c2c setup` / first `doctor --fix`
+Ask this **before** the public address exists (`c2c setup -w hub` / first `doctor --fix`
 that starts a tunnel). Do not mention tunnels, wrangler, DNS, or hostnames.
 Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
 
-1. `c2c tunnel status -w <workspace> --json`
+1. `c2c tunnel status -w hub --json`
 2. If `needsChoice` is false: do not ask again.
-3. If `needsChoice` is true: tell the user exactly `userPrompt` and wait.
+2b. If `needsChoice` is true and `defaultChoice` is not null (the user saved a
+   machine-wide fixed domain with `c2c prefs set --default-zone`): do NOT ask.
+   Run `c2c tunnel choose -w hub --mode named --json` (the zone comes from the
+   saved default). If `loggedIn` is false, tell them `loginPrompt` first.
+   If it returns `fallback: true`, tell them `userMessage` and continue on the
+   temporary address.
+3. If `needsChoice` is true and `defaultChoice` is null: tell the user exactly `userPrompt` and wait.
    - 没有账号 / 没有域名 / 临时 / 不用 →
-     `c2c tunnel choose -w <ws> --mode quick --json`
+     `c2c tunnel choose -w hub --mode quick --json`
    - 有域名（例如 example.com）→ first tell them `loginPrompt`, then
-     `c2c tunnel choose -w <ws> --mode named --zone <domain> --json`.
+     `c2c tunnel choose -w hub --mode named --zone <domain> --json`.
      This may open the user's own browser (the Cloudflare exception in
      Golden rule 5). Wait until the command finishes.
      If they said they have an account but gave no domain: ask once for the
@@ -257,15 +306,16 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
      `winget install Cloudflare.cloudflared`. Do this yourself; don't ask.
 2. If the c2c repo has no `node_modules`, run `pnpm install && pnpm build` in it.
 3. Run `c2c sandbox-allow --json`, then **Connection choice**, then
-   `c2c setup -w <workspace> --json`.
+   `c2c setup -w hub --json`.
    `sandbox-allow` edits Codex `config.toml` only — it adds C2C's state directory
    to `[sandbox_workspace_write].writable_roots` so later chats can write logs
    without elevation. If the write is denied, request approval and retry once.
-   → returns `{ mcpUrl, pairingCode, workspaceName, connectorName, ... }`.
+   → returns `{ mcpUrl, pairingCode, workspaceName, connectorName, ... }`. In hub mode
+   `workspaceName` is the placeholder `hub`, not a project: use WORKSPACE for anything about a project.
    `connectorName` is this workspace's plugin title (legacy installs stay
    `Codex with ChatGPT`; additional workspaces get `Codex with ChatGPT · <name>`).
    Pairing codes expire in ~5 minutes. Do not mint one until the ChatGPT
-   Authorize / pairing form is on screen: run `c2c pair --json` then type
+   Authorize / pairing form is on screen: run `c2c pair -w hub --json` then type
    that code immediately. Doctor does not pre-mint a code.
 4. `c2c prefs --json` (this machine, not this workspace).
    - If `setupMode` is null: tell the user exactly `setupChoicePrompt`. Wait
@@ -281,15 +331,12 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
    - `setupMode: "auto"`: continue with step 5. Keep the two-failure fallback.
 5. Open ChatGPT on the ONE iab tab (see **In-app browser**). Foreground +
    markHandoff immediately. Same tab, `goto` only:
-   - 开发人员模式: skip `https://chatgpt.com/#settings/Security` when
-     `developerModeEnabled` is true. Otherwise open it, enable 开发人员模式
-     ("Developer mode") if it is off, then `c2c prefs set --developer-mode`.
-     Never record it as off. If creating the connector later says developer
-     mode is required, open this page, enable it, save `--developer-mode`,
-     and retry create — do not skip that recovery.
+   - 开发人员模式: do NOT visit `#settings/Security` up front (no such toggle in the current UI).
+     Only if creating the connector fails saying it is required: find the setting, enable it,
+     save `c2c prefs set --developer-mode` (never record it as off), and retry create.
    - 已有该 `connectorName`: `https://chatgpt.com/plugins` — Delete it (never
      Reconnect). Then `goto` the 加插件 URL below.
-   - 还没有 / 刚删掉: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - 还没有 / 刚删掉: `https://chatgpt.com/plugins` (新增 → 新增自訂 MCP 伺服器)
      Operate ONLY on `connectorName` from step 3:
       - If that exact name exists: Delete it, then create it again. Never
         Reconnect, never edit-in-place, never open the old Server URL.
@@ -299,7 +346,7 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
       - Server URL: the `mcpUrl` from step 3
       - Authentication: OAuth
      Fill the known form in one script when you can. Then Connect / Authorize.
-     Only then run `c2c pair --json` and type that code. As soon as it shows
+     Only then run `c2c pair -w hub --json` and type that code. As soon as it shows
      Connected / authorized / pairing accepted, continue — do NOT wait for 8
      tools on this page.
 6. Same tab: open the first C2C chat per **Conversation management**
@@ -307,8 +354,10 @@ Speak only of 临时地址 / 固定域名 / 登录 Cloudflare.
    in long-chat). Confirm Chat mode per **In-app browser** §7 (if it is Work,
    open a new Chat conversation instead). Send the boot prompt from
    `docs/protocol.md` §Boot Prompt, then (same chat) send:
-   `Use the "<connectorName>" connector: call workspace_info and read hello-style top-level file. Reply with the workspace name.`
-   Confirm the reply matches `workspaceName` (wait per **In-app browser** §8).
+   `Use the "<connectorName>" connector: call list_workspaces, then call workspace_info with workspace="<WORKSPACE>" and read a top-level file. Reply with the workspace name.`
+   (`<WORKSPACE>` is the `workspace.name` from `c2c workspace add`; see **Hub mode**.)
+   Confirm the reply matches `<WORKSPACE>` (the project name; not the hub's `workspaceName`)
+   (wait per **In-app browser** §8).
    Only then save the chat URL with `c2c session set` (see Conversation
    management). If the name does not match, do not save. markDeliverable.
 7. Report to the user exactly in this shape (no internals):
@@ -350,19 +399,17 @@ Opening line:
 Then guide ONE action at a time, waiting for the user to say「好了」before the
 next action:
 
-1. If `developerModeEnabled` is not true: ask them to open
-   `https://chatgpt.com/#settings/Security` and enable 开发人员模式. After they
-   say「好了」, `c2c prefs set --developer-mode`. If it is already remembered,
-   skip this step.
+1. Skip 开发人员模式 (the current UI does not need it). Only if creating the connector later
+   says it is required, ask them to find and enable it, then `c2c prefs set --developer-mode`.
 2. Ask them to open `https://chatgpt.com/plugins`. If the exact `connectorName`
    exists, delete only that connector. Never ask them to touch another workspace's connector.
 3. Ask them to open
-   `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   `https://chatgpt.com/plugins` (新增 → 新增自訂 MCP 伺服器)
    and create the exact `connectorName` with:
    - Description: `Securely connect ChatGPT to the current Codex workspace for planning and review.`
    - Server URL: the current `mcpUrl`
    - Authentication: OAuth
-4. Ask them to Connect / Authorize. Then run `c2c pair --json` and give them
+4. Ask them to Connect / Authorize. Then run `c2c pair -w hub --json` and give them
    only that pairing code. If it expires before they finish, run pair again.
 5. When they report Connected / authorized / pairing accepted, resume the normal
    setup/reconnect flow at its ChatGPT verification step. If automatic browser
@@ -453,7 +500,7 @@ Project. Do **not** click the ChatGPT sidebar to create the Project
 1. Tell the user exactly this (fill in the workspace name):
 
 ```
-请在 ChatGPT 里新建一个项目，名字用「<workspaceName>」，记忆请选「仅限项目记忆」。
+请在 ChatGPT 里新建一个项目，名字用「<WORKSPACE>」，记忆请选「仅限项目记忆」。
 
 如果侧栏里看不到「项目」：把鼠标放在「聊天」上，点右边出现的三个点，选择「按项目整理」。
 
@@ -518,9 +565,9 @@ Do not invent `STATE: RESUME`. If the original chat is gone, send HANDOFF.
 All control messages start with `[C2C]`. Keep Codex→ChatGPT messages under 1 KB.
 ChatGPT's replies are expected to be substantive (see step 3). Docs: `docs/protocol.md`.
 
-0. `c2c tunnel status -w <workspace> --json`. If `needsChoice`, follow
+0. `c2c tunnel status -w hub --json`. If `needsChoice`, follow
    **Connection choice** first (existing installs: ask once, then remember).
-   Then `c2c doctor -w <workspace> --json` (auto-repairs). **Doctor gate:** if local
+   Then `c2c doctor -w hub --json` (auto-repairs). **Doctor gate:** if local
    is not green, do not open ChatGPT and do not send INIT. If
    `namedRepair.needed` is true, tell the user `namedRepair.userMessage`, run
    `c2c tunnel login --json` (their browser; Cloudflare exception), then doctor
@@ -566,6 +613,7 @@ ChatGPT's replies are expected to be substantive (see step 3). Docs: `docs/proto
 STATE: INIT
 TASK_ID: c2c_f81a
 ITERATION: 0
+WORKSPACE: <name from c2c workspace add>
 
 GOAL:
 <user's goal, one paragraph>
@@ -613,6 +661,7 @@ Produce a C2C PLAN message.
 STATE: EXECUTED
 TASK_ID: c2c_f81a
 ITERATION: 1
+WORKSPACE: <name from c2c workspace add>
 
 RESULT:
 Execution finished.
@@ -623,7 +672,8 @@ CHANGED_FILES:
 TESTS:
 27 passed
 
-Please independently inspect the workspace and current git diff through MCP.
+Please independently inspect the workspace and current git diff through MCP
+(pass workspace="<WORKSPACE>" on every tool call).
 If execution_output lists a readable item for this iteration, list then read it.
 If status is restricted, ignore it and review from git_diff.
 ```
@@ -662,10 +712,12 @@ When the user asks ChatGPT web to generate an image or video:
 
 ## Workflow: disconnect（"断开 ChatGPT"）
 
-1. `c2c unpair -w <workspace>` (revokes all tokens immediately).
-2. Optionally remove the connector on the same iab tab via
-   `https://chatgpt.com/plugins` (foreground + markHandoff). Only touch
-   this workspace's `connectorName`.
+1. One project: `c2c workspace remove <name>` (ChatGPT loses access to that project
+   immediately; the connector and the other projects are untouched).
+   Everything: `c2c unpair -w hub` (revokes all tokens immediately).
+2. Optionally remove the hub connector on the same iab tab via
+   `https://chatgpt.com/plugins`, only when disconnecting everything. Only touch
+   `connectorName` (`Codex with ChatGPT · hub`).
 3. Tell the user: "已断开 ChatGPT 对该项目的访问。"
 
 ## Workflow: reconnect after address reclaim（全关掉以后地址失效）
@@ -674,7 +726,7 @@ This is the normal case when the user quit Codex / the terminal / the machine:
 the previous public address is gone. Doctor already started a new one.
 `connectorAction: "update"` means Delete + create again — not Reconnect.
 
-`c2c doctor --json` will look like:
+`c2c doctor -w hub --json` will look like:
 `{ "chatgptRepair": { "needed": true, "connectorAction": "update", "connectorName": "...", "userMessage": "...", "mcpUrl": "...", "pages": { ... } } }`
 
 1. Tell the user exactly `chatgptRepair.userMessage`. Then you repair. Do not
@@ -685,11 +737,10 @@ the previous public address is gone. Doctor already started a new one.
    `manual`, use **Guided manual ChatGPT setup** (chosen) instead of automating.
 2. Same one iab tab as setup (foreground + markHandoff). Settings URLs only
    until Connected — never hunt menus:
-   - 开发人员模式: skip `https://chatgpt.com/#settings/Security` when
-     `developerModeEnabled` is true. If create/delete then says developer
-     mode is required, open it, enable, `c2c prefs set --developer-mode`.
+   - 开发人员模式: skip unless create/delete says it is required; then find it, enable it,
+     `c2c prefs set --developer-mode`.
    - 插件总管（只用来 Delete）: `https://chatgpt.com/plugins`
-   - 加插件（Delete 之后必走）: `https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2Fplugins`
+   - 加插件（Delete 之后必走）: `https://chatgpt.com/plugins` (新增 → 新增自訂 MCP 伺服器)
 3. Operate ONLY on `chatgptRepair.connectorName`. Never touch another
    workspace's connector.
    - If that exact name exists on the plugins hub: **Delete** it. Confirm the
@@ -701,11 +752,11 @@ the previous public address is gone. Doctor already started a new one.
       - Description: `Securely connect ChatGPT to the current Codex workspace for planning and review.`
       - Server URL: `chatgptRepair.mcpUrl`
       - Authentication: OAuth
-     Then Connect / Authorize. Only then run `c2c pair --json` and type that
+     Then Connect / Authorize. Only then run `c2c pair -w hub --json` and type that
      code. Continue as soon as it is Connected — do not wait for 8 tools on
      the settings page.
    - If the name is already gone, skip Delete and only create.
-4. `c2c doctor --json` again. Same tab: only after the Doctor gate is green,
+4. `c2c doctor -w hub --json` again. Same tab: only after the Doctor gate is green,
    reopen the chat this Codex thread was already using (`session.url` /
    the URL you saved earlier in THIS thread). Do not rewrite Project
    instructions — they store the connector **name**, which did not change.
@@ -726,7 +777,7 @@ the previous public address is gone. Doctor already started a new one.
 
 ## Workflow: repair（anything looks broken）
 
-1. `c2c doctor -w <workspace> --json`. Doctor gate: do not open ChatGPT / send
+1. `c2c doctor -w hub --json`. Doctor gate: do not open ChatGPT / send
    `[C2C]` until local is green, except reconnect settings pages.
 2. If `namedRepair.needed`, tell the user `namedRepair.userMessage`, run
    `c2c tunnel login --json`, then doctor again. Do not Delete the connector.
@@ -739,11 +790,11 @@ the previous public address is gone. Doctor already started a new one.
 
 | Symptom | Action |
 | --- | --- |
-| Bridge not running | `c2c start` (doctor does this automatically) |
-| Tunnel dead / URL unreachable / 全关掉后连接失效 | `c2c doctor` → if `namedRepair.needed`, login to Cloudflare and doctor again (do not Delete). If `chatgptRepair.needed`, tell the user the message, then **Delete** THIS workspace's connector only (`connectorName`) and create it again. Never Reconnect. After recreate, re-check `workspace_info` in the saved chat; if it still fails, new chat in the same Project (or long-chat switch) + HANDOFF. |
+| Bridge not running | `c2c start -w hub` (doctor does this automatically) |
+| Tunnel dead / URL unreachable / 全关掉后连接失效 | `c2c doctor -w hub` → if `namedRepair.needed`, login to Cloudflare and doctor again (do not Delete). If `chatgptRepair.needed`, tell the user the message, then **Delete** THIS workspace's connector only (`connectorName`) and create it again. Never Reconnect. After recreate, re-check `workspace_info` in the saved chat; if it still fails, new chat in the same Project (or long-chat switch) + HANDOFF. |
 | Collection page shows only Retry | Same iab tab: Retry once, then open the last working chat and click its Project link. Do not write INIT/EXECUTED waiting checkpoints until the message is visible. |
 | ChatGPT says tool call failed / 401 | token expired or revoked → re-pair (new pairing code + authorize) |
-| Pairing code rejected/expired | `c2c pair --json` for a fresh code |
+| Pairing code rejected/expired | `c2c pair -w hub --json` for a fresh code |
 | Same explicit ChatGPT setup/reconnect browser configuration step fails twice after repair | Stop automating ChatGPT settings and use **Guided manual ChatGPT setup fallback**. Do not count browser/js timeout, loading/generating, or login/2FA waiting as failures. |
 | Port conflict | handled automatically; never surface to the user |
 | Every new chat “repairs” / cannot write the log or settings directory | `c2c sandbox-allow --json` (once). Do not ask the user. |

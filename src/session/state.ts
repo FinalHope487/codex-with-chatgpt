@@ -1,10 +1,11 @@
 import path from "node:path";
 import fs from "node:fs";
 import { getStateDir, readJsonIfExists, writeSecureJson } from "../config/paths.js";
+import { readUiPrefs } from "../config/ui-prefs.js";
 
 export type ConversationMode = "long-chat" | "project";
 
-export type ConversationReason = "existing-long-chat" | "project" | "new-workspace";
+export type ConversationReason = "existing-long-chat" | "project" | "new-workspace" | "default-long-chat";
 
 export type ProtocolState =
   | "INIT"
@@ -113,6 +114,17 @@ export function projectIdFromUrl(url: string): string | null {
 
 export function resolveConversation(session: SavedSession | null): ConversationView {
   if (!session) {
+    if (readUiPrefs().defaultConversationMode === "long-chat") {
+      return {
+        mode: "long-chat",
+        reason: "default-long-chat",
+        projectUrl: null,
+        projectReady: false,
+        chatUrl: null,
+        connectorName: null,
+        reuseSavedChat: false,
+      };
+    }
     return {
       mode: "project",
       reason: "new-workspace",

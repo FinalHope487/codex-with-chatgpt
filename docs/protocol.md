@@ -58,6 +58,7 @@ Keep messages < 1 KB. No diffs, no logs, no file bodies.
 STATE: INIT
 TASK_ID: c2c_f81a
 ITERATION: 0
+WORKSPACE: my-app
 
 GOAL:
 Implement dark mode.
@@ -105,6 +106,7 @@ Plans must be finite, concrete, executable. Not 40-step epics.
 STATE: EXECUTED
 TASK_ID: c2c_f81a
 ITERATION: 1
+WORKSPACE: my-app
 
 RESULT:
 Execution finished.
@@ -179,6 +181,7 @@ instructions > Project memory.
 STATE: HANDOFF
 TASK_ID: c2c_f81a
 ITERATION: 4
+WORKSPACE: my-app
 
 ORIGINAL_GOAL:
 Implement dark mode with a persisted user preference.
@@ -196,6 +199,15 @@ Flash-on-load fix needs verification in src/theme/ThemeProvider.tsx.
 NEXT_EXPECTED_STEP:
 Independently review iteration 4 via git_diff and reply PLAN or DONE.
 ```
+
+## Hub mode and the WORKSPACE line
+
+One connector serves every project registered with `c2c workspace add`. The
+`WORKSPACE:` line carries the registry name; ChatGPT copies it into the
+`workspace` argument of each MCP tool. With several projects registered, a missing
+name is answered with `WORKSPACE_REQUIRED` and an unknown one with
+`WORKSPACE_NOT_REGISTERED`, both listing the valid names, never with another
+project's data. With exactly one project registered the argument may be omitted.
 
 ## Loop limits
 
@@ -240,6 +252,12 @@ Rules:
     you need through MCP, and resume from NEXT_EXPECTED_STEP.
 13. If this chat sits in a ChatGPT Project, use only the connector named
     in that Project's instructions. Do not use another workspace's connector.
+14. Only if this connector has a list_workspaces tool (hub mode): it serves
+    several registered workspaces, so every tool call must pass the
+    "workspace" argument set to the WORKSPACE line of the latest control
+    message (call list_workspaces if unsure). Never read another workspace
+    to answer a question about this one. A single-workspace connector has
+    no such argument.
 ```
 
 ## Project instructions
@@ -254,6 +272,7 @@ You are the planning and review layer for one local workspace. Codex executes.
 
 This Project is bound only to:
 - Workspace name: {{workspace_name}}
+- Hub connector only (it has list_workspaces): pass workspace="{{workspace_name}}" on every tool call
 - Kind: {{project_type}} ({{languages}} / {{frameworks}})
 - Connector (use this one only): {{connector_name}}
 

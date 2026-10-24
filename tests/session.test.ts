@@ -8,7 +8,7 @@ import {
   resolveConversation,
   writeSession,
 } from "../src/session/state.js";
-import { cleanup, makeTmpDir } from "./helpers.js";
+import { cleanup, isolateStateDir, makeTmpDir } from "./helpers.js";
 
 const PROJECT = "https://chatgpt.com/g/g-p-6a94399430e08191860ab5364b7748b8/project";
 
@@ -30,7 +30,11 @@ describe("normalizeProjectUrl", () => {
 
 describe("resolveConversation", () => {
   it("treats a missing file as a new workspace (Project by default)", () => {
+    // resolveConversation(null) reads machine-wide prefs, so never use the real state dir
+    const stateDir = isolateStateDir();
     const view = resolveConversation(null);
+    cleanup(stateDir);
+    delete process.env.C2C_STATE_DIR;
     expect(view.mode).toBe("project");
     expect(view.reason).toBe("new-workspace");
     expect(view.reuseSavedChat).toBe(false);

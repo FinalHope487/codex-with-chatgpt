@@ -2,9 +2,14 @@
 
 ## Trust boundaries
 
-1. **Workspace root** is the smallest authorization boundary. One bridge serves
-   exactly one workspace; every token is bound to `workspace_id`; a token for
-   project A returns 403 on project B's bridge.
+1. **Workspace root** is the smallest authorization boundary. In single-project
+   mode one bridge serves exactly one workspace and every token is bound to its
+   `workspace_id`. In **hub mode** one bridge and one connector serve every project
+   on an explicit allowlist (`c2c workspace add`); the token is bound to the hub, and
+   each tool call is resolved against that allowlist and then confined to the chosen
+   project's root. The trade-off is deliberate: **any ChatGPT chat that can use the
+   connector can read any registered project**. Register only what you are willing to
+   expose together, and remove projects with `c2c workspace remove`.
 2. **Workspace content is untrusted.** README, comments, diffs may contain
    prompt injection. Every MCP tool description carries an explicit warning and
    tools never grant capabilities based on file content.
@@ -27,6 +32,8 @@
 | Oversized file / diff DoS | read_file caps lines and bytes per response; git_diff paginates by byte offset with hard caps; search caps matches and file sizes |
 | Tunnel exposure | Bridge binds 127.0.0.1 only (refuses 0.0.0.0); the only public surface is HTTPS via the tunnel, protected by OAuth; `/health` reveals only a salted workspace hash |
 | Admin API abuse | Loopback-only + random admin token (0600 runtime file) + requests with proxy headers (`cf-connecting-ip`, `x-forwarded-for`) rejected; unauthenticated probes get 404 |
+| Cross-project read (hub) | Only registered projects are reachable; names/ids are matched against the allowlist (a filesystem path is not a valid reference); `..`, absolute paths and symlinks are still contained to the chosen project; per-project sensitive-file rules and `.c2cignore` apply; the registry is re-read on every call so `workspace remove` takes effect immediately |
+| Over-broad registration | `c2c workspace add` refuses drive roots, your home directory and its parents, and C2C's own state directory (it holds tokens) |
 | Log credential leakage | Logger redacts token prefixes, bearer headers, token-like parameters, and pairing-code-shaped strings before writing |
 | Execution output leak | Codex may nominate test/build/lint logs; a local sanitizer redacts tokens, pairing-code-shaped strings and home paths, truncates size, and refuses private-key blocks entirely. Restricted items are listed without a body. ChatGPT still cannot run commands. |
 | Generated media handoff | ChatGPT's connector remains read-only. The local executor explicitly imports the original browser download into a new workspace-relative path; signatures, size, containment and SVG active-content checks are enforced, and existing files are never overwritten. |
