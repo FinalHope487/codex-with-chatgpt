@@ -10,10 +10,17 @@
 > | 相比原版的优势 | 缺点 / 取舍 |
 > |---|---|
 > | 所有项目共用一个连接器、一条隧道、一个域名，不必逐项目配置与配对 | **隔离较弱：** 一次配对即可读取*所有*已登记项目，而非单一项目 |
+> | **只登录一次，不是每个项目登录一次。** 原版每个项目各有一份登录/配对，新增项目（以及每次 Quick Tunnel 重启导致网址变化）都要重新建立 ChatGPT 连接器并手动配对。本版为 hub 维护一份持久化登录状态，重启后仍有效，可省下大量时间 | |
 > | `c2c workspace add/remove` 增删项目，登记表每次调用都重新读取，无需重启 | **单点故障：** hub 桥接或隧道挂了，所有项目都读不到 |
 > | 每次读取都绑定 workspace id，Skill 的 Workspace 检查比对 id，聊天不会悄悄读到别的项目 | 登记只能在本机用命令行完成；ChatGPT 无法登记，新项目须先执行 `c2c workspace add` |
 > | hub 有独立默认域名（`c2c-hub-<id>`），同一域名下两个 hub 不会冲突 | 与上游分叉：维护与合并上游更新的成本更高，实际使用验证也较少 |
 > | 记住默认固定域名 zone，新建设置更省事 | 工具调用需带 workspace 参数，比单项目模式多一点往返 |
+>
+> **域名限制（选择连接方式前请先看）：**
+> - 「持久、免重复登录」需要**固定域名**：你自己拥有、DNS 托管在 Cloudflare 的域名（用 `c2c prefs set --default-zone <域名>` 设置一次）。没有的话只能用 Quick Tunnel，网址随机且每次重启都会变，必须重新建连接器并配对，和原版一样。
+> - hub 使用单一域名 `c2c-hub-<id>.<你的域名>`：只能是 zone 正下方的一层子域名（更深层级不在 Cloudflare 免费证书覆盖范围内）。
+> - 若该域名在 DNS 里已存在，已有记录不会被覆盖且不会报错，该名字可能仍指向别的隧道；同一 zone 上的第二个 hub 请用 `--hostname` 取不同名字。
+> - 需要 Cloudflare 账号（免费版即可）与 `cloudflared`；`cloudflared tunnel login` 是一次性的交互步骤。
 >
 > 单项目模式仍可照常使用（`c2c setup -w <project>`）。Hub 细节见 [Hub 模式](README.md#hub-mode-one-connector-for-every-project) 与 `docs/security.md`。请从 [FinalHope487/codex-with-chatgpt](https://github.com/FinalHope487/codex-with-chatgpt) 安装本版本；想要原版的单项目行为，请使用上游仓库。
 
