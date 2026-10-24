@@ -8,7 +8,7 @@
 > | Advantages over the original | Disadvantages / trade-offs |
 > |---|---|
 > | One ChatGPT connector, one tunnel, one hostname for every project, so no per-project setup or pairing | **Weaker isolation:** one pairing grants read access to *all* registered projects, not just one |
-> | **Log in once, not once per project.** The original keeps a separate login/pairing per project, so every new project (and every Quick Tunnel restart, which changes the URL) means recreating a ChatGPT connector and pairing again by hand. Here one persisted login state is kept for the hub and survives restarts, which saves a lot of time | |
+> | **Log in once, not once per project.** In the original, every time you switch to a different project you must log in again by hand (create a new ChatGPT connector and pair it). Here one persisted login state is kept for the hub, so switching projects needs no login, which saves a lot of time. (Quick Tunnel restarts also change the URL and force a re-pair in either edition.) | |
 > | Add or remove a project with `c2c workspace add/remove`; the registry is re-read on every call, so no restart | **Single point of failure:** if the hub bridge or tunnel is down, every project is unreachable |
 > | Every read is bound to a workspace id, and the Skill's Workspace check compares ids, so a chat cannot silently read another project | Registration is local-only (CLI). ChatGPT cannot register a project, so each new project needs `c2c workspace add` first |
 > | Hub gets its own default hostname (`c2c-hub-<id>`), so two hubs on one domain do not collide | Diverges from upstream: more code to maintain and to merge with upstream changes, and less field-tested |
