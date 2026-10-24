@@ -1,6 +1,21 @@
-# Codex with ChatGPT
+# Codex with ChatGPT — Hub 版
 
 [English](README.md) | **简体中文**
+
+> [!IMPORTANT]
+> **本仓库是 [XiaoDuoYa/codex-with-chatgpt](https://github.com/XiaoDuoYa/codex-with-chatgpt) 的修改分支（「Hub 版」），依 MIT 许可证使用。** 并非原版，也未获原作者背书。原版版权与许可声明保留在 [LICENSE](LICENSE)。
+>
+> **改了什么：** 一个共享的 *hub* 连接器服务多个项目。只建一条隧道、一个 ChatGPT 连接器，再用 `c2c workspace add` 登记文件夹。原版是每个项目一条隧道 + 一个连接器。
+>
+> | 相比原版的优势 | 缺点 / 取舍 |
+> |---|---|
+> | 所有项目共用一个连接器、一条隧道、一个域名，不必逐项目配置与配对 | **隔离较弱：** 一次配对即可读取*所有*已登记项目，而非单一项目 |
+> | `c2c workspace add/remove` 增删项目，登记表每次调用都重新读取，无需重启 | **单点故障：** hub 桥接或隧道挂了，所有项目都读不到 |
+> | 每次读取都绑定 workspace id，Skill 的 Workspace 检查比对 id，聊天不会悄悄读到别的项目 | 登记只能在本机用命令行完成；ChatGPT 无法登记，新项目须先执行 `c2c workspace add` |
+> | hub 有独立默认域名（`c2c-hub-<id>`），同一域名下两个 hub 不会冲突 | 与上游分叉：维护与合并上游更新的成本更高，实际使用验证也较少 |
+> | 记住默认固定域名 zone，新建设置更省事 | 工具调用需带 workspace 参数，比单项目模式多一点往返 |
+>
+> 单项目模式仍可照常使用（`c2c setup -w <project>`）。Hub 细节见 [Hub 模式](README.md#hub-mode-one-connector-for-every-project) 与 `docs/security.md`。请从 [FinalHope487/codex-with-chatgpt](https://github.com/FinalHope487/codex-with-chatgpt) 安装本版本；想要原版的单项目行为，请使用上游仓库。
 
 > ChatGPT 负责思考，Codex 负责干活。
 
@@ -27,7 +42,7 @@ Agent（Codex），然后去倒杯咖啡：
 
 1. 环境自检：需要 git 和 Node.js ≥ 20，缺什么就自动安装
   （macOS 用 Homebrew，Windows 用 winget），同时安装 cloudflared。
-2. 下载：把 https://github.com/XiaoDuoYa/codex-with-chatgpt 克隆到
+2. 下载：把 https://github.com/FinalHope487/codex-with-chatgpt 克隆到
    ~/codex-with-chatgpt（已存在就 git pull 更新）。
 3. 构建：在该目录里执行 corepack pnpm install 和 corepack pnpm build。
 4. 安装 Skill：先确定 Codex home：如果设置了非空的 CODEX_HOME 就使用它，

@@ -1,4 +1,19 @@
-# Codex with ChatGPT
+# Codex with ChatGPT — Hub edition
+
+> [!IMPORTANT]
+> **This is a modified fork ("Hub edition") of [XiaoDuoYa/codex-with-chatgpt](https://github.com/XiaoDuoYa/codex-with-chatgpt), used under its MIT license.** It is not the original and is not endorsed by the original authors. The original copyright and license notice are kept in [LICENSE](LICENSE).
+>
+> **What it changes:** one shared *hub* connector serves many projects. You create one tunnel and one ChatGPT connector, then register folders with `c2c workspace add`. The original makes one tunnel + one connector per project.
+>
+> | Advantages over the original | Disadvantages / trade-offs |
+> |---|---|
+> | One ChatGPT connector, one tunnel, one hostname for every project, so no per-project setup or pairing | **Weaker isolation:** one pairing grants read access to *all* registered projects, not just one |
+> | Add or remove a project with `c2c workspace add/remove`; the registry is re-read on every call, so no restart | **Single point of failure:** if the hub bridge or tunnel is down, every project is unreachable |
+> | Every read is bound to a workspace id, and the Skill's Workspace check compares ids, so a chat cannot silently read another project | Registration is local-only (CLI). ChatGPT cannot register a project, so each new project needs `c2c workspace add` first |
+> | Hub gets its own default hostname (`c2c-hub-<id>`), so two hubs on one domain do not collide | Diverges from upstream: more code to maintain and to merge with upstream changes, and less field-tested |
+> | Remembers a default fixed-domain zone for new setups | Tool calls carry a workspace argument, so a little more chatter than single-project mode |
+>
+> Single-project mode still works unchanged (`c2c setup -w <project>`). Hub details: [Hub mode](#hub-mode-one-connector-for-every-project) and `docs/security.md`. Install this edition from [FinalHope487/codex-with-chatgpt](https://github.com/FinalHope487/codex-with-chatgpt). Want the original, single-project behavior? Use the upstream repo.
 
 > ChatGPT thinks. Codex works.
 > ChatGPT 负责思考，Codex 负责干活。
@@ -43,7 +58,7 @@ Detailed docs below are in English · 详细中文文档见 **[README.zh-CN.md](
 
 1. 环境自检：需要 git 和 Node.js ≥ 20，缺什么就自动安装
   （macOS 用 Homebrew，Windows 用 winget），同时安装 cloudflared。
-2. 下载：把 https://github.com/XiaoDuoYa/codex-with-chatgpt 克隆到
+2. 下载：把 https://github.com/FinalHope487/codex-with-chatgpt 克隆到
    ~/codex-with-chatgpt（已存在就 git pull 更新）。
 3. 构建：在该目录里执行 corepack pnpm install 和 corepack pnpm build。
 4. 安装 Skill：先确定 Codex home：如果设置了非空的 CODEX_HOME 就使用它，
@@ -70,7 +85,7 @@ I am a non-technical user — do everything yourself:
 1. Check the environment: git and Node.js >= 20 must be available. Install
    anything missing yourself (macOS: Homebrew, Windows: winget). Also install
    cloudflared.
-2. Download: clone https://github.com/XiaoDuoYa/codex-with-chatgpt into
+2. Download: clone https://github.com/FinalHope487/codex-with-chatgpt into
    ~/codex-with-chatgpt (if it already exists, git pull to update).
 3. Build: inside that folder run `corepack pnpm install` then `corepack pnpm build`.
 4. Install the Skill: determine the Codex home first: use a non-empty CODEX_HOME
